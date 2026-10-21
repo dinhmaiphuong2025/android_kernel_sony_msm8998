@@ -10,6 +10,10 @@ on:
         description: 'Enable debug mode'
         required: false
         default: 'false'
+      toolchain:
+        description: 'Compiler toolchain: official (clang 17) or aosp (clang 20)'
+        required: false
+        default: 'official'
 
 env:
   ARCH: arm64
@@ -69,12 +73,26 @@ jobs:
       run: |
         mkdir -p toolchain
         cd toolchain
-        # Download official LLVM/Clang 17.0.6
-        curl -sL "https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz" -o llvm.tar.xz
-        tar -xJf llvm.tar.xz
-        rm llvm.tar.xz
-        mv clang+llvm-* clang
+        if [ "${{ github.event.inputs.toolchain }}" = "aosp" ]; then
+          # AOSP clang 20 (r547379) - same major as the known-working ReSukiSU build
+          curl -sL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz" -o clang.tar.gz
+          mkdir -p clang
+          tar -xzf clang.tar.gz -C clang
+          rm clang.tar.gz
+          if [ ! -x clang/bin/clang ] && [ -x clang/clang-r547379/bin/clang ]; then
+            mv clang/clang-r547379/* clang/
+            rmdir clang/clang-r547379
+          fi
+        else
+          # Download official LLVM/Clang 17.0.6
+          curl -sL "https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz" -o llvm.tar.xz
+          tar -xJf llvm.tar.xz
+          rm llvm.tar.xz
+          mv clang+llvm-* clang
+        fi
         echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
+        clang --version
+        ld.lld --version
 
 
     - name: Verify KSU Integration
@@ -103,10 +121,10 @@ jobs:
     - name: Build kernel
       run: |
         make O=out ARCH=arm64 \
-          CC="ccache clang" CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- $DEFCONFIG
+          CC="ccache clang" CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1 $DEFCONFIG
 
         make O=out -j$(nproc --all) ARCH=arm64 \
-          CC="ccache clang" CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          CC="ccache clang" CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LLVM=1
     - name: ccache stats
       run: |
         ccache -s
