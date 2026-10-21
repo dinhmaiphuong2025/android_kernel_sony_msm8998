@@ -90,7 +90,9 @@ jobs:
           rm llvm.tar.xz
           mv clang+llvm-* clang
         fi
+        export PATH="$(pwd)/clang/bin:$PATH"
         echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
+        test -x clang/bin/clang || { echo "clang binary missing"; exit 1; }
         clang --version
         ld.lld --version
 
