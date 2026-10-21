@@ -154,6 +154,14 @@ jobs:
         # Create zip
         zip -r kernel.zip *
 
+        # Fallback package with appended DTBs (v2 -> v2.1 -> legacy order)
+        if [ -f ../out/arch/arm64/boot/Image.gz-dtb ]; then
+          rm -f Image
+          cp ../out/arch/arm64/boot/Image.gz-dtb .
+          zip -q -r kernel-dtb.zip * -x kernel.zip
+          rm -f Image.gz-dtb
+        fi
+
         echo "KERNEL_ZIP=kernel.zip" >> $GITHUB_ENV
 
     - name: Upload artifacts
@@ -163,12 +171,14 @@ jobs:
         path: |
           AnyKernel3/kernel.zip
           anykernel3/kernel.zip
+          anykernel3/kernel-dtb.zip
           out/arch/arm64/boot/Image
           out/arch/arm64/boot/Image.gz-dtb
           out/arch/arm64/boot/zImage
           out/.config
           out/Module.symvers
         if-no-files-found: ignore
+        include-hidden-files: true
 
     - name: Build Summary
       run: |
