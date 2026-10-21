@@ -133,6 +133,7 @@ jobs:
         sed -i "s/^device.name2=.*/device.name2=maple_dsds/" anykernel.sh 2>/dev/null || true
         sed -i "s/^device.name3=.*/device.name3=G8141/" anykernel.sh 2>/dev/null || true
         sed -i "s/^device.name4=.*/device.name4=G8142/" anykernel.sh 2>/dev/null || true
+        sed -i "s/^device.name5=.*/device.name5=SO-04J/" anykernel.sh 2>/dev/null || true
         sed -i "s|^BLOCK=.*|BLOCK=/dev/block/by-name/boot;|" anykernel.sh 2>/dev/null || true
 
         # Prefer the raw Image. The boot image already carries the device DTB,
