@@ -77,11 +77,6 @@ jobs:
         echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
 
 
-    - name: Download AnyKernel3
-      run: |
-        git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3 \
-          || echo "::warning::AnyKernel3 clone failed, will upload built Image only"
-
     - name: Verify KSU Integration
       run: |
         echo "Checking for KSU integration..."
@@ -121,32 +116,39 @@ jobs:
 
     - name: Package AnyKernel3
       run: |
-        if [ ! -d AnyKernel3 ]; then
-          echo "::warning::AnyKernel3 not available, skipping zip packaging"
+        # Use AnyKernel3 already present in the kernel tree
+        AK3_DIR=""
+        for d in anykernel3 AnyKernel3 AnyKernel AK3; do
+          if [ -d "$d" ]; then AK3_DIR="$d"; break; fi
+        done
+        if [ -z "$AK3_DIR" ]; then
+          echo "::warning::No in-tree AnyKernel3 found, skipping zip packaging"
           exit 0
         fi
 
-        cd AnyKernel3
-        # Configure AnyKernel3 device string and boot partition
-        sed -i "s/device.name1=.*/device.name1=$DEVICE_CODENAME/" anykernel.sh 2>/dev/null || true
-        sed -i "s/kernel.string=.*/kernel.string=$DEVICE_CODENAME-Kernel-BakaSU/" anykernel.sh 2>/dev/null || true
-        sed -i 's|^BLOCK=.*|BLOCK=boot;|' anykernel.sh 2>/dev/null || true
+        cd "$AK3_DIR"
+        # Configure AnyKernel3 kernel string (device names and BLOCK are in the template)
+        sed -i "s/^kernel.string=.*/kernel.string=$DEVICE_CODENAME-Kernel-BakaSU/" anykernel.sh 2>/dev/null || true
+        sed -i "s/^device.name1=.*/device.name1=maple/" anykernel.sh 2>/dev/null || true
+        sed -i "s/^device.name2=.*/device.name2=maple_dsds/" anykernel.sh 2>/dev/null || true
+        sed -i "s/^device.name3=.*/device.name3=G8141/" anykernel.sh 2>/dev/null || true
+        sed -i "s/^device.name4=.*/device.name4=G8142/" anykernel.sh 2>/dev/null || true
+        sed -i "s|^BLOCK=.*|BLOCK=/dev/block/by-name/boot;|" anykernel.sh 2>/dev/null || true
 
-        # Copy kernel Image (prefer Image.gz-dtb for appended-DTB devices)
-        if [ -f ../out/arch/arm64/boot/Image.gz-dtb ]; then
+        # Prefer the raw Image. The boot image already carries the device DTB,
+        # so appending another DTB (Image.gz-dtb) can make the bootloader pick
+        # the wrong board variant.
+        if [ -f ../out/arch/arm64/boot/Image ]; then
+          cp ../out/arch/arm64/boot/Image .
+        elif [ -f ../out/arch/arm64/boot/Image.gz-dtb ]; then
           cp ../out/arch/arm64/boot/Image.gz-dtb .
         elif [ -f ../out/arch/arm64/boot/Image.gz ]; then
           cp ../out/arch/arm64/boot/Image.gz .
-        elif [ -f ../out/arch/arm64/boot/Image ]; then
-          cp ../out/arch/arm64/boot/Image .
         elif [ -f ../out/arch/arm64/boot/zImage ]; then
           cp ../out/arch/arm64/boot/zImage .
-        fi
-
-        # Copy dtbs if exists
-        if [ -d ../out/arch/arm64/boot/dts ]; then
-          mkdir -p dtbs
-          cp ../out/arch/arm64/boot/dts/*/*.dtb dtbs/ 2>/dev/null || true
+        else
+          echo "::error::No kernel image found to package"
+          exit 1
         fi
 
         # Create zip
@@ -164,6 +166,7 @@ jobs:
           out/arch/arm64/boot/Image
           out/arch/arm64/boot/Image.gz-dtb
           out/arch/arm64/boot/zImage
+          out/.config
           out/Module.symvers
         if-no-files-found: ignore
 
